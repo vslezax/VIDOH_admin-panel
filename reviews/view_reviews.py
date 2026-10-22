@@ -1,0 +1,52 @@
+"""
+Просмотр отзывов (таблица event_reviews).
+
+Запуск:  python reviews/view_reviews.py
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+_proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if _proj_root not in sys.path:
+    sys.path.insert(0, _proj_root)
+
+from lib import crud, db, ui
+
+STATUSES = ("pending", "published", "rejected")
+
+
+def main() -> int:
+    try:
+        conn = db.connect()
+    except Exception as e:  # noqa: BLE001
+        print(ui.fail(f"Не удалось подключиться к БД: {e}"))
+        return 1
+    try:
+        ui.header("Отзывы")
+        status = ui.ask("Фильтр по статусу (или Enter)", default="").strip().lower()
+        where, params = "", []
+        if status in STATUSES:
+            where = "status = %s"
+            params = [status]
+        rows = crud.list_rows(
+            conn, "event_reviews",
+            columns=["id", "event_id", "user_id", "rating", "status", "created_at"],
+            where=where, params=params, limit=100,
+        )
+        ui.section(f"Найдено: {len(rows)}")
+        crud.print_rows(rows, max_width=30) if rows else print(ui.dim("  нет"))
+
+        if rows and ui.confirm("Показать текст первого отзыва?"):
+            detail = crud.fetch_one(conn, "event_reviews", rows[0]["id"])
+            ui.section(f"event_reviews id={detail['id']}")
+            print(ui.info(f"  rating: {detail['rating']}"))
+            print(ui.info(f"  text: {detail['text']}"))
+    finally:
+        conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

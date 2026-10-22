@@ -1,0 +1,661 @@
+enum user_status {
+	pending
+	active
+	blocked
+	deleted
+}
+
+enum organizer_status {
+	draft
+	active
+	suspended
+	archived
+}
+
+enum organizer_legal_form {
+	individual
+	legal_entity
+}
+
+enum event_status {
+	draft
+	published
+	postponed
+	cancelled
+	finished
+	archived
+}
+
+enum media_type {
+	image
+	video
+	doc
+}
+
+enum media_role {
+	main
+	gallery
+	logo
+	icon
+	cover
+	avatar
+}
+
+enum link_type {
+	ticket_sale
+	website
+	social
+	stream
+	other
+}
+
+enum document_type {
+	service_rules
+	payment_rules
+	safety_rules
+	refund_policy
+	other
+}
+
+enum review_status {
+	pending
+	published
+	rejected
+}
+
+enum order_status {
+	pending
+	paid
+	cancelled
+	refunded
+	failed
+}
+
+enum ticket_status {
+	issued
+	used
+	cancelled
+	refunded
+}
+
+enum promo_discount_type {
+	percent
+	fixed
+}
+
+enum schedule_kind {
+	once
+	recurring
+}
+
+enum contact_type {
+	phone
+	email
+	vk
+	telegram
+	instagram
+	website
+	other
+}
+
+enum payment_status {
+	pending
+	succeeded
+	failed
+	refunded
+	cancelled
+}
+
+Table users [headercolor: #33d636] {
+	id bigint [ pk, increment ]
+	uuid uuid [ not null, unique ]
+	email citext [ unique ]
+	phone varchar(20) [ unique ]
+	password_hash text
+	name varchar(100)
+	nickname varchar(150)
+	avatar_media_id bigint
+	status user_status [ not null, default: pending ]
+	email_verified_at timestamptz
+	phone_verified_at timestamptz
+	last_login_at timestamptz
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+	deleted_at timestamptz
+
+	Note: 'CHECK: email IS NOT NULL OR phone IS NOT NULL. Только авторизованный покупатель сайта.'
+}
+
+Table event_schedules [headercolor: #2ed930] {
+	id bigint [ pk, increment, not null ]
+	event_id bigint [ not null ]
+	kind schedule_kind [ not null ]
+	start_at timestamptz
+	recurrence varchar(255)
+	utc_offset varchar(6) [ not null ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'CHECK: (kind=once AND start_at IS NOT NULL AND recurrence IS NULL) OR (kind=recurring AND recurrence IS NOT NULL). CHECK: utc_offset ~ ^[+-][0-9]{2}:[0-9]{2}$. 1:N — у события много расписаний.'
+}
+
+Table user_sessions [headercolor: #0af712] {
+	id bigint [ pk, increment ]
+	user_id bigint [ not null ]
+	refresh_token_hash varchar(255) [ not null, unique ]
+	user_agent varchar(255)
+	ip inet
+	expires_at timestamptz [ not null ]
+	revoked_at timestamptz
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(user_id)
+	}
+
+	Note: 'CHECK: revoked_at IS NULL OR revoked_at >= created_at.'
+}
+
+Table organizers [headercolor: #6fde5b] {
+	id bigint [ pk, increment, not null ]
+	uuid uuid [ not null, unique ]
+	slug varchar(160) [ not null, unique ]
+	name varchar(200) [ not null ]
+	short_description varchar(500)
+	description text
+	avatar_media_id bigint
+	cover_media_id bigint
+	legal_form organizer_legal_form [ not null, default: legal_entity ]
+	inn varchar(12)
+	ogrn varchar(15)
+	status organizer_status [ not null, default: draft ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+	deleted_at timestamptz
+
+	Note: 'Медиа 1:1 через FK. Контакты — в organizer_contacts (1:N).'
+}
+
+Table countries [headercolor: #5adb56] {
+	id smallserial [ pk ]
+	name varchar(100) [ not null ]
+	iso char(2) [ not null, unique ]
+
+	Note: 'Страна проведения.'
+}
+
+Table cities [headercolor: #60db3d] {
+	id bigint [ pk, increment ]
+	country_id smallint [ not null ]
+	name varchar(150) [ not null ]
+	slug varchar(160) [ not null ]
+	lat numeric(9,6)
+	lng numeric(9,6)
+	timezone varchar(64) [ not null, default: 'UTC' ]
+
+	indexes {
+		(country_id, slug) [ unique ]
+	}
+
+	Note: 'CHECK: lat BETWEEN -90 AND 90; lng BETWEEN -180 AND 180. timezone — IANA, напр. Europe/Moscow.'
+}
+
+Table venues [headercolor: #4adb30] {
+	id bigint [ pk, increment ]
+	city_id bigint [ not null ]
+	slug varchar(180) [ not null ]
+	name varchar(200) [ not null ]
+	address text [ not null ]
+	metro varchar(150)
+	lat numeric(9,6)
+	lng numeric(9,6)
+	capacity integer
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+
+	indexes {
+		(city_id, slug) [ unique ]
+	}
+
+	Note: 'CHECK: lat BETWEEN -90 AND 90; lng BETWEEN -180 AND 180; capacity IS NULL OR capacity >= 0.'
+}
+
+Table categories [headercolor: #55db46] {
+	id bigint [ pk, increment ]
+	slug varchar(160) [ not null, unique ]
+	name varchar(150) [ not null ]
+	description text
+	icon_media_id bigint
+	sort_order integer [ not null, default: 0 ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+	deleted_at timestamptz
+
+	Note: 'icon_media_id = NULL → заглушка. Иерархия не поддерживается.'
+}
+
+Table media [headercolor: #4ce843] {
+	id bigint [ pk, increment ]
+	storage_key text [ not null, unique ]
+	url text [ not null ]
+	type media_type [ not null ]
+	alt varchar(255)
+	width integer
+	height integer
+	size_bytes bigint
+	uploaded_by bigint
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(uploaded_by)
+	}
+
+	Note: 'CHECK: width IS NULL OR width > 0; height IS NULL OR height > 0; size_bytes IS NULL OR size_bytes >= 0. Единая библиотека файлов.'
+}
+
+Table event_media [headercolor: #3bf507] {
+	event_id bigint [ pk, not null ]
+	media_id bigint [ pk, not null ]
+	role media_role [ not null, default: gallery ]
+	sort_order integer [ not null, default: 0 ]
+	caption varchar(255)
+
+	indexes {
+		(event_id, role) [ name: 'uq_event_media_one_role_per_event', unique ]
+	}
+
+	Note: 'Один media_id может быть привязан к событию один раз. Одна роль (в т.ч. main) на событие — через UNIQUE (event_id, role).'
+}
+
+Table events [headercolor: #12ff05] {
+	id bigint [ pk, increment ]
+	uuid uuid [ not null, unique ]
+	slug varchar(200) [ not null, unique ]
+	title varchar(255) [ not null ]
+	short_description varchar(500)
+	description text
+	venue_id bigint
+	online_url text
+	status event_status [ not null, default: draft ]
+	age_rating smallint
+	capacity integer
+	currency char(3) [ not null, default: 'RUB' ]
+	published_at timestamptz
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+	deleted_at timestamptz
+
+	indexes {
+		(status, published_at)
+		(venue_id)
+	}
+
+	Note: 'CHECK: venue_id IS NOT NULL OR online_url IS NOT NULL. CHECK: age_rating IS NULL OR age_rating IN (0,6,12,16,18). CHECK: capacity IS NULL OR capacity >= 0. Признак бесплатности — по tickets.price.'
+}
+
+Table event_organizers [headercolor: #5aed28] {
+	event_id bigint [ pk, not null ]
+	organizer_id bigint [ pk, not null ]
+	is_primary boolean [ not null, default: false ]
+	role varchar(100)
+	sort_order integer [ not null, default: 0 ]
+	confirmed_at timestamptz
+
+	indexes {
+		(event_id) [ name: 'uq_event_organizers_primary', unique ]
+	}
+
+	Note: 'UNIQUE (event_id) WHERE is_primary — один primary-организатор на событие.'
+}
+
+Table event_categories [headercolor: #35db35] {
+	event_id bigint [ pk, not null ]
+	category_id bigint [ pk, not null ]
+	is_primary boolean [ not null, default: false ]
+	sort_order integer [ not null, default: 0 ]
+
+	indexes {
+		(event_id) [ name: 'uq_event_categories_primary', unique ]
+	}
+
+	Note: 'UNIQUE (event_id) WHERE is_primary — одна primary-категория на событие.'
+}
+
+Table event_links [headercolor: #0dfa05] {
+	id bigint [ pk, increment ]
+	event_id bigint [ not null ]
+	type link_type [ not null ]
+	url text [ not null ]
+	title varchar(150)
+	sort_order integer [ not null, default: 0 ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'CHECK: url ~ ^https?://.'
+}
+
+Table tickets [headercolor: #4ce332] {
+	id bigint [ pk, increment ]
+	event_id bigint [ not null ]
+	name varchar(150) [ not null ]
+	description text
+	price numeric(12,2) [ not null, default: 0 ]
+	currency char(3) [ not null, default: 'RUB' ]
+	tickets_count integer
+	sold_count integer [ not null, default: 0 ]
+	external_url text
+	sort_order integer [ not null, default: 0 ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'CHECK: price >= 0; tickets_count IS NULL OR tickets_count >= 0; sold_count >= 0; tickets_count IS NULL OR sold_count <= tickets_count. Признак бесплатности события — по price=0.'
+}
+
+Table promo_codes [headercolor: #175e7a] {
+	id bigint [ pk, increment ]
+	code varchar(64) [ not null, unique ]
+	event_id bigint
+	discount_type promo_discount_type [ not null ]
+	discount_value numeric(12,2) [ not null ]
+	max_uses integer
+	used_count integer [ not null, default: 0 ]
+	valid_from timestamptz
+	valid_to timestamptz
+	is_active boolean [ not null, default: true ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'CHECK: discount_value >= 0; (discount_type = percent → discount_value <= 100); max_uses IS NULL OR (max_uses > 0 AND used_count <= max_uses); used_count >= 0; valid_to IS NULL OR valid_from IS NULL OR valid_to > valid_from.'
+}
+
+Table user_favorites [headercolor: #46e031] {
+	user_id bigint [ pk, not null ]
+	event_id bigint [ pk, not null ]
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'Избранные события пользователя.'
+}
+
+Table event_reviews [headercolor: #32e82c] {
+	id bigint [ pk, increment ]
+	event_id bigint [ not null ]
+	user_id bigint [ not null ]
+	rating smallint [ not null ]
+	text text
+	status review_status [ not null, default: published ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+
+	indexes {
+		(event_id, user_id) [ unique ]
+		(event_id, status)
+	}
+
+	Note: 'CHECK: rating BETWEEN 1 AND 5. Один отзыв на пользователя на событие.'
+}
+
+Table orders [headercolor: #175e7a] {
+	id bigint [ pk, increment ]
+	uuid uuid [ not null, unique ]
+	user_id bigint [ not null ]
+	event_id bigint [ not null ]
+	status order_status [ not null, default: pending ]
+	total_amount numeric(12,2) [ not null, default: 0 ]
+	currency char(3) [ not null, default: 'RUB' ]
+	promo_code_id bigint
+	created_at timestamptz [ not null ]
+	paid_at timestamptz
+	cancelled_at timestamptz
+
+	indexes {
+		(user_id, status)
+		(event_id)
+	}
+
+	Note: 'CHECK: total_amount >= 0. total_amount поддерживается триггером по order_items.'
+}
+
+Table order_items [headercolor: #175e7a] {
+	id bigint [ pk, increment ]
+	order_id bigint [ not null ]
+	ticket_id bigint [ not null ]
+	quantity smallint [ not null ]
+	unit_price numeric(12,2) [ not null ]
+	total_price numeric(12,2) [ not null ]
+	event_title_snapshot varchar(255)
+	ticket_name_snapshot varchar(150)
+
+	indexes {
+		(order_id)
+		(ticket_id)
+	}
+
+	Note: 'CHECK: quantity > 0; unit_price >= 0; total_price >= 0. Триггер: total_price = quantity * unit_price.'
+}
+
+Table issued_tickets [headercolor: #d4ed2d] {
+	id bigint [ pk, increment ]
+	uuid uuid [ not null, unique ]
+	order_item_id bigint [ not null ]
+	user_id bigint [ not null ]
+	event_id bigint [ not null ]
+	code varchar(64) [ not null, unique ]
+	status ticket_status [ not null, default: issued ]
+	checked_in_at timestamptz
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(user_id, status)
+		(event_id)
+		(order_item_id)
+	}
+
+	Note: 'CHECK: (status = used AND checked_in_at IS NOT NULL) OR (status <> used AND checked_in_at IS NULL). Консистентность user_id/event_id с orders/order_items — триггер.'
+}
+
+Table payments [headercolor: #175e7a] {
+	id bigint [ pk, increment ]
+	order_id bigint [ not null ]
+	provider varchar(50) [ not null ]
+	provider_txn varchar(150)
+	idempotency_key varchar(150)
+	amount numeric(12,2) [ not null ]
+	currency char(3) [ not null ]
+	status payment_status [ not null, default: pending ]
+	raw_payload jsonb
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(order_id)
+		(provider, provider_txn) [ unique ]
+		(provider, idempotency_key) [ unique ]
+	}
+
+	Note: 'CHECK: amount > 0.'
+}
+
+Table event_documents [headercolor: #cee825] {
+	id bigint [ pk, increment ]
+	event_id bigint [ not null ]
+	type document_type [ not null ]
+	title varchar(255) [ not null ]
+	content text
+	url text
+	sort_order integer [ not null, default: 0 ]
+	created_at timestamptz [ not null ]
+	updated_at timestamptz [ not null ]
+
+	indexes {
+		(event_id)
+	}
+
+	Note: 'CHECK: content IS NOT NULL OR url IS NOT NULL. content — текст в БД, url — внешняя ссылка.'
+}
+
+Table organizer_contacts [headercolor: #67f257] {
+	id bigint [ pk, increment ]
+	organizer_id bigint [ not null ]
+	type contact_type [ not null ]
+	value varchar(255) [ not null ]
+	is_shown boolean [ not null, default: true ]
+	sort_order integer [ not null, default: 0 ]
+	created_at timestamptz [ not null ]
+
+	indexes {
+		(organizer_id)
+	}
+
+	Note: '1:N: у организатора много контактов разных типов.'
+}
+
+Ref fk_media_id_users {
+	media.id < users.avatar_media_id [ delete: set null, update: no action ]
+}
+
+Ref fk_users_id_user_sessions {
+	users.id < user_sessions.user_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_media_id_organizers_avatar {
+	media.id < organizers.avatar_media_id [ delete: set null, update: no action ]
+}
+
+Ref fk_countries_id_cities {
+	countries.id < cities.country_id [ delete: no action, update: no action ]
+}
+
+Ref fk_cities_id_venues {
+	cities.id < venues.city_id [ delete: no action, update: no action ]
+}
+
+Ref fk_media_id_categories {
+	media.id < categories.icon_media_id [ delete: set null, update: no action ]
+}
+
+Ref fk_events_id_event_media {
+	events.id < event_media.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_media_id_event_media {
+	media.id < event_media.media_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_venues_id_events {
+	venues.id < events.venue_id [ delete: set null, update: no action ]
+}
+
+Ref fk_events_id_event_organizers {
+	events.id < event_organizers.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_organizers_id_event_organizers {
+	organizers.id < event_organizers.organizer_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_event_categories {
+	events.id < event_categories.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_categories_id_event_categories {
+	categories.id < event_categories.category_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_event_links {
+	events.id < event_links.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_tickets {
+	events.id < tickets.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_promo_codes {
+	events.id < promo_codes.event_id [ delete: set null, update: no action ]
+}
+
+Ref fk_users_id_user_favorites {
+	users.id < user_favorites.user_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_user_favorites {
+	events.id < user_favorites.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_event_reviews {
+	events.id < event_reviews.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_users_id_event_reviews {
+	users.id < event_reviews.user_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_users_id_orders {
+	users.id < orders.user_id [ delete: no action, update: no action ]
+}
+
+Ref fk_events_id_orders {
+	events.id < orders.event_id [ delete: no action, update: no action ]
+}
+
+Ref fk_promo_codes_id_orders {
+	promo_codes.id < orders.promo_code_id [ delete: set null, update: no action ]
+}
+
+Ref fk_orders_id_order_items {
+	orders.id < order_items.order_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_tickets_id_order_items {
+	tickets.id < order_items.ticket_id [ delete: no action, update: no action ]
+}
+
+Ref fk_order_items_id_issued_tickets {
+	order_items.id < issued_tickets.order_item_id [ delete: no action, update: no action ]
+}
+
+Ref fk_users_id_issued_tickets {
+	users.id < issued_tickets.user_id [ delete: no action, update: no action ]
+}
+
+Ref fk_events_id_issued_tickets {
+	events.id < issued_tickets.event_id [ delete: no action, update: no action ]
+}
+
+Ref fk_orders_id_payments {
+	orders.id < payments.order_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_event_schedules {
+	events.id < event_schedules.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_events_id_event_documents {
+	events.id < event_documents.event_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_media_id_organizers_cover {
+	media.id < organizers.cover_media_id [ delete: set null, update: no action ]
+}
+
+Ref fk_organizers_id_organizer_contacts {
+	organizers.id < organizer_contacts.organizer_id [ delete: cascade, update: no action ]
+}
+
+Ref fk_users_id_media {
+	users.id < media.uploaded_by [ delete: set null, update: no action ]
+}

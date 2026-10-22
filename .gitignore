@@ -1,0 +1,35 @@
+﻿# --- Секреты и окружение ---
+.env
+.env.*
+
+# --- Виртуальное окружение ---
+.venv/
+venv/
+env/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Сгенерированные артефакты ---
+schema.sql
+*.log
+
+# --- Снапшоты БД/S3 (содержат данные, не коммитим) ---
+snapshots/
+
+# --- IDE ---
+.idea/
+.vscode/
+.continue/
+*.swp
+
+# --- ОС ---
+Thumbs.db
+desktop.ini
+.DS_Store

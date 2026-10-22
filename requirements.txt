@@ -1,0 +1,11 @@
+# Зависимости админ-скриптов VDH-DB-connection
+# Установка:  python -m pip install -r requirements.txt
+# (в виртуальном окружении .venv)
+psycopg2-binary>=2.9
+python-dotenv>=1.0
+boto3>=1.28
+# только для service/convert_dbml-to-sql.py (конвертация DBML -> SQL)
+lark-dbml>=0.7
+sqlglot>=20.0
+# только для media/upload_media.py (обработка изображений)
+Pillow>=10.0
