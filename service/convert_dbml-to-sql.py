@@ -1,5 +1,5 @@
 """
-Читает VIDOH.dbml, генерирует schema.sql для PostgreSQL
+Читает schema.dbml, генерирует schema.sql для PostgreSQL
 и добавляет CREATE EXTENSION citext в начало файла.
 
 Пути считаются относительно КОРНЯ проекта (на уровень выше service/).
@@ -10,7 +10,7 @@ from lark_dbml.converter import to_sql
 from sqlglot import Dialects
 
 ROOT = Path(__file__).resolve().parent.parent
-DBML_FILE = ROOT / "VIDOH.dbml"
+DBML_FILE = ROOT / "schema.dbml"
 SQL_FILE = ROOT / "schema.sql"
 
 def main():

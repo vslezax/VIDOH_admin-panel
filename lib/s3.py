@@ -169,14 +169,17 @@ def build_public_url(cfg: S3Config, key: str) -> str:
     return f"{scheme}://{cfg.default_bucket}.{host}/{key}"
 
 
-def media_type_from_mime(content_type: str) -> str:
-    """Маппинг MIME -> media_type enum ('image' | 'video' | 'doc')."""
+def media_type_from_mime(content_type: str) -> str | None:
+    """Маппинг MIME -> media_type enum ('image' | 'video').
+
+    Возвращает None для типов, которых нет в enum media_type.
+    """
     ct = (content_type or "").lower()
     if ct.startswith("image/"):
         return "image"
     if ct.startswith("video/"):
         return "video"
-    return "doc"
+    return None
 
 
 def print_not_configured(reason: str) -> None:

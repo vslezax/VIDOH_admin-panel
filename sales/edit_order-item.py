@@ -42,7 +42,7 @@ def main() -> int:
         ch, val = crud.ask_fk(conn, "ticket_id", "tickets", current=it["ticket_id"], label_cols=("name",), allow_null=False)
         if ch and val is not None:
             updates["ticket_id"] = val
-        ch, val = crud.ask_int("quantity", it["quantity"], min_value=1)
+        ch, val = crud.ask_int("quantity", it["quantity"], min_value=1, max_value=32767)
         if ch and val is not None:
             updates["quantity"] = val
         ch, val = crud.ask_decimal("unit_price", it["unit_price"])
@@ -63,6 +63,16 @@ def main() -> int:
         ch, val = crud.ask_text("ticket_name_snapshot", it["ticket_name_snapshot"])
         if ch:
             updates["ticket_name_snapshot"] = val
+
+        new_qty = updates.get("quantity", it["quantity"])
+        new_unit = updates.get("unit_price", it["unit_price"])
+        new_total = updates.get("total_price", it["total_price"])
+        if ("quantity" in updates or "unit_price" in updates) and "total_price" not in updates:
+            updates["total_price"] = round(new_qty * new_unit, 2)
+            new_total = updates["total_price"]
+        if round(new_total, 2) != round(new_qty * new_unit, 2):
+            print(ui.fail("  total_price должен равняться quantity * unit_price (CHECK)."))
+            return 0
 
         if not updates:
             print(ui.dim("  Изменений нет."))

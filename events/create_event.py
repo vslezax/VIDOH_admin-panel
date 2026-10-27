@@ -22,7 +22,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("draft", "published", "postponed", "cancelled", "finished", "archived")
+STATUSES = ("unpublished", "published", "cancelled", "finished")
 AGE_RATINGS = ("0", "6", "12", "16", "18")
 
 
@@ -66,7 +66,7 @@ def main() -> int:
         if desc:
             data["description"] = desc
 
-        changed, status = crud.ask_enum("status", STATUSES, current="draft")
+        changed, status = crud.ask_enum("status", STATUSES, current="unpublished")
         data["status"] = status
 
         raw_age = ui.ask("age_rating (0/6/12/16/18 или Enter — пусто)", default="").strip()
@@ -76,7 +76,7 @@ def main() -> int:
             else:
                 data["age_rating"] = int(raw_age)
 
-        ch, cap = crud.ask_int("capacity", min_value=0)
+        ch, cap = crud.ask_int("capacity", min_value=1)
         if ch and cap is not None:
             data["capacity"] = cap
 
@@ -86,6 +86,9 @@ def main() -> int:
         ch, pub = crud.ask_datetime("published_at")
         if ch:
             data["published_at"] = pub
+        if status == "published" and not data.get("published_at"):
+            print(ui.fail("  Для status='published' нужно указать published_at (CHECK)."))
+            return 0
 
         data["uuid"] = str(uuid.uuid4())
         data["created_at"] = "now()"

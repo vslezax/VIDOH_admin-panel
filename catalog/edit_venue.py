@@ -29,7 +29,8 @@ def main() -> int:
         v = crud.fetch_one(conn, "venues", vid)
         ui.print_table(["поле", "значение"],
                        [["name", v["name"]], ["slug", v["slug"]], ["city_id", v["city_id"]],
-                        ["address", v["address"]], ["metro", v["metro"]], ["capacity", v["capacity"]]],
+                        ["address", v["address"]], ["metro_station_id", v["metro_station_id"]],
+                        ["capacity", v["capacity"]]],
                        max_width=60)
         updates: dict = {}
         ch, val = crud.ask_fk(conn, "city_id", "cities", current=v["city_id"], label_cols=("name",), allow_null=False)
@@ -44,9 +45,9 @@ def main() -> int:
         ch, val = crud.ask_text("address", v["address"])
         if ch and val:
             updates["address"] = val
-        ch, val = crud.ask_text("metro", v["metro"])
+        ch, val = crud.ask_fk(conn, "metro_station_id", "metro_stations", current=v["metro_station_id"], label_cols=("name", "line_name"))
         if ch:
-            updates["metro"] = val
+            updates["metro_station_id"] = val
         raw = ui.ask(f"lat (текущее: {v['lat']}), Enter — оставить").strip()
         if raw:
             try:
@@ -67,9 +68,14 @@ def main() -> int:
                     print(ui.warn("  lng вне диапазона — пропускаю."))
             except ValueError:
                 print(ui.warn("  lng не число — пропускаю."))
-        ch, val = crud.ask_int("capacity", v["capacity"], min_value=0)
+        ch, val = crud.ask_int("capacity", v["capacity"], min_value=1)
         if ch:
             updates["capacity"] = val
+        new_lat = updates.get("lat", v["lat"])
+        new_lng = updates.get("lng", v["lng"])
+        if (new_lat is None) != (new_lng is None):
+            print(ui.fail("  lat и lng нужно задать парой (CHECK)."))
+            return 0
 
         if not updates:
             print(ui.dim("  Изменений нет."))

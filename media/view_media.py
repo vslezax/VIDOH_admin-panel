@@ -47,13 +47,13 @@ def show_summary(conn) -> None:
 
 def list_media(conn) -> None:
     ui.header("Список медиа")
-    type_f = ui.ask("Фильтр по типу (image/video/doc), Enter — все", default="").strip().lower()
+    type_f = ui.ask("Фильтр по типу (image/video), Enter — все", default="").strip().lower()
     search = ui.ask("Поиск по ключу/url/alt, Enter — без поиска", default="").strip()
     limit = ui.ask_int("Сколько показать", default=50) or 50
 
     where = []
     params: list = []
-    if type_f in ("image", "video", "doc"):
+    if type_f in ("image", "video"):
         where.append("type = %s")
         params.append(type_f)
     if search:
@@ -118,6 +118,7 @@ def show_media_card(conn, client, cfg) -> None:
         ("organizers", "avatar_media_id"),
         ("organizers", "cover_media_id"),
         ("categories", "icon_media_id"),
+        ("metro_stations", "line_icon_media_id"),
     ]:
         found = db.query(conn, f"SELECT id FROM {tbl} WHERE {col}=%s ORDER BY id;", (mid,))
         for r in found:

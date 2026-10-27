@@ -2,8 +2,7 @@
 Создание выданного билета (INSERT в issued_tickets).
 
 Обязательные: order_item_id (FK), user_id (FK), event_id (FK), code (уникальный).
-status DEFAULT 'issued'. CHECK: status='used' -> checked_in_at задан;
-status<>'used' -> checked_in_at IS NULL.
+status DEFAULT 'active'. CHECK: status='used' -> checked_in_at задан.
 
 Запуск:  python sales/create_issued-ticket.py
 """
@@ -19,7 +18,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("issued", "used", "cancelled", "refunded")
+STATUSES = ("active", "used", "cancelled", "refunded")
 
 
 def main() -> int:
@@ -52,7 +51,7 @@ def main() -> int:
             return 0
         data["code"] = code
 
-        _, status = crud.ask_enum("status", STATUSES, current="issued")
+        _, status = crud.ask_enum("status", STATUSES, current="active")
         data["status"] = status
         if status == "used":
             ch, checked = crud.ask_datetime("checked_in_at (обязателен для 'used')")
@@ -71,8 +70,8 @@ def main() -> int:
         cols = list(data.keys())
         placeholders = ", ".join(["%s"] * len(cols))
         cols_sql = ", ".join(db.quote_ident(c) for c in cols)
-        sql = (f"INSERT INTO issued_tickets ({cols_sql}, created_at) "
-               f"VALUES ({placeholders}, now()) RETURNING id;")
+        sql = (f"INSERT INTO issued_tickets ({cols_sql}, created_at, updated_at) "
+               f"VALUES ({placeholders}, now(), now()) RETURNING id;")
         try:
             rows = db.query(conn, sql, tuple(data.values()))
             print(ui.ok(f"  Создан билет id={rows[0]['id']}"))

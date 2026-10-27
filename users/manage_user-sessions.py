@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import ipaddress
 import os
 import sys
 
@@ -47,6 +48,12 @@ def create_session(conn) -> None:
         return
     ua = ui.ask("user_agent (Enter — пусто)", default="").strip() or None
     ip = ui.ask("ip (Enter — пусто)", default="").strip() or None
+    if ip is not None:
+        try:
+            ipaddress.ip_address(ip)
+        except ValueError:
+            print(ui.fail("  ip должен быть валидным IPv4/IPv6 (INET)."))
+            return
     ch, expires = crud.ask_datetime("expires_at")
     if not expires:
         print(ui.fail("  expires_at обязателен."))

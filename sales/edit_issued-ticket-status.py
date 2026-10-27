@@ -2,7 +2,7 @@
 Изменение статуса выданного билета (UPDATE issued_tickets).
 
 Сценарии: check-in (used + checked_in_at=now()), отмена (cancelled),
-возврат (refunded), перевыпуск (issued, checked_in_at=NULL).
+возврат (refunded), перевыпуск (active, checked_in_at=NULL).
 CHECK: status='used' <-> checked_in_at NOT NULL — соблюдается автоматически.
 
 Запуск:  python sales/edit_issued-ticket-status.py
@@ -18,7 +18,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("issued", "used", "cancelled", "refunded")
+STATUSES = ("active", "used", "cancelled", "refunded")
 
 
 def main() -> int:
@@ -43,11 +43,11 @@ def main() -> int:
             return 0
 
         if new_status == "used":
-            set_sql = "status='used', checked_in_at=now()"
+            set_sql = "status='used', checked_in_at=now(), updated_at=now()"
             params = []
             preview = "status -> used, checked_in_at -> now()"
         else:
-            set_sql = "status=%s, checked_in_at=NULL"
+            set_sql = "status=%s, checked_in_at=NULL, updated_at=now()"
             params = [new_status]
             preview = f"status -> {new_status}, checked_in_at -> NULL"
 

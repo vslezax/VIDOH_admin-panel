@@ -2,7 +2,8 @@
 Создание типа билета (INSERT в tickets).
 
 Обязательные: event_id (FK), name. price DEFAULT 0.
-CHECK: price >= 0, tickets_count >= 0, sold_count >= 0, sold_count <= tickets_count.
+CHECK: price >= 0, tickets_count > 0 (или NULL), sold_count >= 0,
+sold_count <= tickets_count.
 
 Запуск:  python tickets/create_ticket.py
 """
@@ -40,12 +41,18 @@ def main() -> int:
             data["description"] = val
         ch, price = crud.ask_decimal("price", required=True)
         data["price"] = price if price is not None else 0
+        if data["price"] < 0:
+            print(ui.fail("  price >= 0 (CHECK)."))
+            return 0
         currency = ui.ask("currency", default="RUB").strip().upper() or "RUB"
+        if len(currency) != 3:
+            print(ui.fail("  currency должен быть ровно 3 символа (CHAR(3))."))
+            return 0
         data["currency"] = currency
-        ch, cnt = crud.ask_int("tickets_count", min_value=0)
+        ch, cnt = crud.ask_int("tickets_count", min_value=1)
         if ch and cnt is not None:
             data["tickets_count"] = cnt
-        ch, sold = crud.ask_int("sold_count", default=0, min_value=0)
+        ch, sold = crud.ask_int("sold_count", min_value=0)
         data["sold_count"] = sold if sold is not None else 0
         if "tickets_count" in data and data["tickets_count"] is not None and data["sold_count"] > data["tickets_count"]:
             print(ui.fail("  sold_count не может быть больше tickets_count (CHECK)."))

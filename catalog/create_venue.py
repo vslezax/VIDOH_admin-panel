@@ -46,9 +46,9 @@ def main() -> int:
             return 0
         data["address"] = address
 
-        ch, val = crud.ask_text("metro")
-        if ch and val:
-            data["metro"] = val
+        ch, val = crud.ask_fk(conn, "metro_station_id", "metro_stations", label_cols=("name", "line_name"))
+        if ch and val is not None:
+            data["metro_station_id"] = val
         raw = ui.ask("lat (-90..90, Enter — пусто)").strip()
         if raw:
             try:
@@ -69,7 +69,10 @@ def main() -> int:
                     print(ui.warn("  lng вне диапазона — пропускаю."))
             except ValueError:
                 print(ui.warn("  lng не число — пропускаю."))
-        ch, val = crud.ask_int("capacity", min_value=0)
+        if ("lat" in data) != ("lng" in data):
+            print(ui.fail("  lat и lng нужно задать парой (CHECK)."))
+            return 0
+        ch, val = crud.ask_int("capacity", min_value=1)
         if ch and val is not None:
             data["capacity"] = val
 

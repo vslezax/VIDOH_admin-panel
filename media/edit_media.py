@@ -23,7 +23,7 @@ import sys
 from lib import db, s3, ui
 
 EDITABLE = ["alt", "type", "uploaded_by", "width", "height"]
-VALID_TYPES = ("image", "video", "doc")
+VALID_TYPES = ("image", "video")
 
 
 def _show_card(conn, mid: int) -> dict | None:
@@ -52,7 +52,8 @@ def _count_bindings(conn, mid: int) -> int:
     em = db.query(conn, "SELECT COUNT(*) c FROM event_media WHERE media_id=%s;", (mid,))
     other = 0
     for tbl, col in [("users", "avatar_media_id"), ("organizers", "avatar_media_id"),
-                     ("organizers", "cover_media_id"), ("categories", "icon_media_id")]:
+                     ("organizers", "cover_media_id"), ("categories", "icon_media_id"),
+                     ("metro_stations", "line_icon_media_id")]:
         r = db.query(conn, f"SELECT COUNT(*) c FROM {tbl} WHERE {col}=%s;", (mid,))
         other += int(r[0]["c"])
     return int(em[0]["c"]) + other
@@ -89,7 +90,7 @@ def edit(conn) -> None:
         alt = val
 
     # type
-    raw = ui.ask(f"type (image/video/doc) (текущее: {m['type']}), Enter — оставить")
+    raw = ui.ask(f"type (image/video) (текущее: {m['type']}), Enter — оставить")
     if raw:
         t = raw.strip().lower()
         if t not in VALID_TYPES:

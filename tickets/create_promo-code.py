@@ -2,7 +2,7 @@
 Создание промокода (INSERT в promo_codes).
 
 Обязательные: code (уникальный), discount_type (enum), discount_value.
-CHECK: discount_value >= 0; percent -> discount_value <= 100;
+CHECK: discount_value > 0; percent -> discount_value <= 100;
        max_uses > 0 и used_count <= max_uses; valid_to > valid_from.
 
 Запуск:  python tickets/create_promo-code.py
@@ -47,15 +47,15 @@ def main() -> int:
         if dval is None:
             print(ui.fail("  discount_value обязателен."))
             return 0
-        if dval < 0 or (dtype == "percent" and dval > 100):
-            print(ui.fail("  discount_value нарушает CHECK (>=0; percent<=100)."))
+        if dval <= 0 or (dtype == "percent" and dval > 100):
+            print(ui.fail("  discount_value нарушает CHECK (>0; percent<=100)."))
             return 0
         data["discount_value"] = dval
 
         ch, max_uses = crud.ask_int("max_uses", min_value=1)
         if ch and max_uses is not None:
             data["max_uses"] = max_uses
-        ch, used = crud.ask_int("used_count", default=0, min_value=0)
+        ch, used = crud.ask_int("used_count", min_value=0)
         data["used_count"] = used if used is not None else 0
         if "max_uses" in data and data["used_count"] > data["max_uses"]:
             print(ui.fail("  used_count не может быть больше max_uses (CHECK)."))
@@ -80,9 +80,16 @@ def main() -> int:
         if not ui.confirm("Создать промокод?"):
             print(ui.dim("  Отменено."))
             return 0
-        nid = crud.run_insert(conn, "promo_codes", data)
-        if nid is not None:
-            print(ui.ok(f"  Создан промокод id={nid}"))
+        cols = list(data.keys())
+        placeholders = ", ".join(["%s"] * len(cols))
+        cols_sql = ", ".join(db.quote_ident(c) for c in cols)
+        sql = (f"INSERT INTO promo_codes ({cols_sql}, created_at, updated_at) "
+               f"VALUES ({placeholders}, now(), now()) RETURNING id;")
+        try:
+            rows = db.query(conn, sql, tuple(data.values()))
+            print(ui.ok(f"  Создан промокод id={rows[0]['id']}"))
+        except Exception as ex:  # noqa: BLE001
+            print(ui.fail(f"  Ошибка: {ex}"))
     finally:
         conn.close()
     return 0

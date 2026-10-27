@@ -45,6 +45,17 @@ def add_contact(conn) -> None:
         return
     is_shown = ui.ask("Показывать на сайте (is_shown)? (y/n)", default="y").strip().lower() in ("y", "yes", "1")
     sort_order = ui.ask_int("sort_order", default=0) or 0
+    if sort_order < 0:
+        print(ui.fail("  sort_order должен быть >= 0 (CHECK)."))
+        return
+    dup = db.query(
+        conn,
+        "SELECT 1 FROM organizer_contacts WHERE organizer_id=%s AND type=%s AND value=%s;",
+        (oid, ctype, value),
+    )
+    if dup:
+        print(ui.warn("  Такой контакт уже существует (UNIQUE organizer_id, type, value)."))
+        return
     data = {"organizer_id": oid, "type": ctype, "value": value, "is_shown": is_shown, "sort_order": sort_order}
     ui.section("Итог")
     crud.show_diff(data)
@@ -87,11 +98,21 @@ def edit_contact(conn) -> None:
     ch, val = crud.ask_bool("is_shown", c["is_shown"])
     if ch:
         updates["is_shown"] = val
-    ch, val = crud.ask_int("sort_order", c["sort_order"])
+    ch, val = crud.ask_int("sort_order", c["sort_order"], min_value=0)
     if ch and val is not None:
         updates["sort_order"] = val
     if not updates:
         print(ui.dim("  Изменений нет."))
+        return
+    new_type = updates.get("type", c["type"])
+    new_value = updates.get("value", c["value"])
+    dup = db.query(
+        conn,
+        "SELECT 1 FROM organizer_contacts WHERE organizer_id=%s AND type=%s AND value=%s AND id<>%s;",
+        (oid, new_type, new_value, c["id"]),
+    )
+    if dup:
+        print(ui.warn("  Такой контакт уже существует (UNIQUE organizer_id, type, value)."))
         return
     crud.show_diff(updates, before=c)
     if not ui.confirm("Применить?"):

@@ -35,7 +35,10 @@ def main() -> int:
             return 0
         data["ticket_id"] = ticket_id
 
-        ch, qty = crud.ask_int("quantity", required=True, min_value=1)
+        ch, qty = crud.ask_int("quantity", required=True, min_value=1, max_value=32767)
+        if qty is None:
+            print(ui.fail("  quantity обязателен (NOT NULL)."))
+            return 0
         data["quantity"] = qty
         ch, unit = crud.ask_decimal("unit_price", required=True)
         if unit is None or unit < 0:
@@ -45,6 +48,9 @@ def main() -> int:
         ch, total = crud.ask_decimal("total_price", required=True)
         if total is None or total < 0:
             print(ui.fail("  total_price >= 0 (CHECK)."))
+            return 0
+        if round(total, 2) != round(qty * unit, 2):
+            print(ui.fail("  total_price должен равняться quantity * unit_price (CHECK)."))
             return 0
         data["total_price"] = total
         ch, val = crud.ask_text("event_title_snapshot")

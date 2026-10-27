@@ -25,8 +25,12 @@ def main() -> int:
         ui.header("Площадки")
         rows = db.query(
             conn,
-            "SELECT v.id, v.name, v.slug, c.name AS city, v.address, v.capacity "
-            "FROM venues v JOIN cities c ON c.id=v.city_id ORDER BY c.name, v.name;",
+            "SELECT v.id, v.name, v.slug, c.name AS city, v.address, "
+            "       ms.name AS metro, v.capacity "
+            "FROM venues v "
+            "JOIN cities c ON c.id=v.city_id "
+            "LEFT JOIN metro_stations ms ON ms.id=v.metro_station_id "
+            "ORDER BY c.name, v.name;",
         )
         crud.print_rows(rows, max_width=30) if rows else print(ui.dim("  нет"))
         print(ui.ok(f"\n  Всего площадок: {len(rows)}"))

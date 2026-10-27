@@ -21,7 +21,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("draft", "published", "postponed", "cancelled", "finished", "archived")
+STATUSES = ("unpublished", "published", "cancelled", "finished")
 AGE_RATINGS = ("0", "6", "12", "16", "18")
 
 
@@ -90,7 +90,7 @@ def main() -> int:
             else:
                 print(ui.warn("  Недопустимый age_rating — пропускаю."))
 
-        ch, val = crud.ask_int("capacity", e["capacity"], min_value=0)
+        ch, val = crud.ask_int("capacity", e["capacity"], min_value=1)
         if ch:
             updates["capacity"] = val
 
@@ -102,11 +102,16 @@ def main() -> int:
         if ch:
             updates["published_at"] = val
 
-        # Проверка venue_or_online после изменений
+        # Проверка venue_or_online и published_at после изменений
         new_venue = updates.get("venue_id", e["venue_id"])
         new_online = updates.get("online_url", e["online_url"])
         if new_venue is None and not new_online:
             print(ui.fail("  Нельзя очистить и venue_id, и online_url одновременно (CHECK)."))
+            return 0
+        new_status = updates.get("status", e["status"])
+        new_published = updates.get("published_at", e["published_at"])
+        if new_status == "published" and not new_published:
+            print(ui.fail("  Для status='published' нужен published_at (CHECK)."))
             return 0
 
         if not updates:

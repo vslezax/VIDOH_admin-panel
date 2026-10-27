@@ -39,9 +39,16 @@ def main() -> int:
         if not ui.confirm("Создать страну?"):
             print(ui.dim("  Отменено."))
             return 0
-        nid = crud.run_insert(conn, "countries", data)
-        if nid is not None:
-            print(ui.ok(f"  Создана страна id={nid}"))
+        cols = list(data.keys())
+        placeholders = ", ".join(["%s"] * len(cols))
+        cols_sql = ", ".join(db.quote_ident(c) for c in cols)
+        sql = (f"INSERT INTO countries ({cols_sql}, created_at, updated_at) "
+               f"VALUES ({placeholders}, now(), now()) RETURNING id;")
+        try:
+            rows = db.query(conn, sql, tuple(data.values()))
+            print(ui.ok(f"  Создана страна id={rows[0]['id']}"))
+        except Exception as ex:  # noqa: BLE001
+            print(ui.fail(f"  Ошибка: {ex}"))
     finally:
         conn.close()
     return 0

@@ -50,6 +50,9 @@ def main() -> int:
             print(ui.fail("  total_amount >= 0 (CHECK)."))
             return 0
         currency = ui.ask("currency", default="RUB").strip().upper() or "RUB"
+        if len(currency) != 3:
+            print(ui.fail("  currency должен быть ровно 3 символа (CHAR(3))."))
+            return 0
         data["currency"] = currency
         ch, promo_id = crud.ask_fk(conn, "promo_code_id", "promo_codes", label_cols=("code",))
         if ch and promo_id is not None:
@@ -61,6 +64,12 @@ def main() -> int:
         ch, cancelled_at = crud.ask_datetime("cancelled_at")
         if ch and cancelled_at:
             data["cancelled_at"] = cancelled_at
+        if data["status"] == "paid" and not data.get("paid_at"):
+            print(ui.fail("  Для status='paid' нужен paid_at (CHECK)."))
+            return 0
+        if data["status"] == "cancelled" and not data.get("cancelled_at"):
+            print(ui.fail("  Для status='cancelled' нужен cancelled_at (CHECK)."))
+            return 0
 
         ui.section("Итог")
         crud.show_diff(data)
@@ -70,8 +79,8 @@ def main() -> int:
         cols = list(data.keys())
         placeholders = ", ".join(["%s"] * len(cols))
         cols_sql = ", ".join(db.quote_ident(c) for c in cols)
-        sql = (f"INSERT INTO orders ({cols_sql}, created_at) "
-               f"VALUES ({placeholders}, now()) RETURNING id;")
+        sql = (f"INSERT INTO orders ({cols_sql}, created_at, updated_at) "
+               f"VALUES ({placeholders}, now(), now()) RETURNING id;")
         try:
             rows = db.query(conn, sql, tuple(data.values()))
             print(ui.ok(f"  Создан заказ id={rows[0]['id']}"))

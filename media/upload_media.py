@@ -26,7 +26,7 @@ from pathlib import Path
 
 from lib import db, s3, ui
 
-ALLOWED_DEFAULT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".mp4", ".mov", ".webm", ".pdf"}
+ALLOWED_DEFAULT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".mp4", ".mov", ".webm"}
 
 
 def _file_info(path: Path) -> dict:
@@ -101,7 +101,8 @@ def upload(conn, client, cfg) -> None:
 
     ext = path.suffix.lower()
     if ext not in ALLOWED_DEFAULT:
-        print(ui.warn(f"  Нестандартное расширение '{ext}' — продолжаю, но проверьте тип."))
+        print(ui.fail(f"  Недопустимое расширение '{ext}'. Разрешены только image/video."))
+        return
 
     info = _file_info(path)
     ui.section("Параметры файла")
@@ -112,11 +113,14 @@ def upload(conn, client, cfg) -> None:
         print(f"  разрешение: {info['width']}x{info['height']}")
 
     default_type = s3.media_type_from_mime(info["content_type"])
+    if default_type is None:
+        print(ui.fail(f"  MIME '{info['content_type']}' не относится к image/video (media_type)."))
+        return
 
     # 2. Доп. поля
     alt = ui.ask("alt-текст (описание), Enter — пусто", default="") or None
-    type_in = ui.ask(f"Тип (image/video/doc)", default=default_type).strip().lower()
-    if type_in not in ("image", "video", "doc"):
+    type_in = ui.ask("Тип (image/video)", default=default_type).strip().lower()
+    if type_in not in ("image", "video"):
         print(ui.warn(f"  Неверный тип '{type_in}', использую '{default_type}'."))
         type_in = default_type
 

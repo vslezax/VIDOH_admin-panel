@@ -43,10 +43,16 @@ def main() -> int:
             updates["phone"] = val
         ch, val = crud.ask_text("name", u["name"])
         if ch:
-            updates["name"] = val
+            if not val:
+                print(ui.warn("  name не может быть NULL (NOT NULL) — пропускаю."))
+            else:
+                updates["name"] = val
         ch, val = crud.ask_text("nickname", u["nickname"])
         if ch:
-            updates["nickname"] = val
+            if not val:
+                print(ui.warn("  nickname не может быть NULL (NOT NULL) — пропускаю."))
+            else:
+                updates["nickname"] = val
         ch, val = crud.ask_fk(conn, "avatar_media_id", "media", current=u["avatar_media_id"], label_cols=("storage_key",))
         if ch:
             updates["avatar_media_id"] = val

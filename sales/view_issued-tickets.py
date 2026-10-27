@@ -14,7 +14,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("issued", "used", "cancelled", "refunded")
+STATUSES = ("active", "used", "cancelled", "refunded")
 
 
 def main() -> int:

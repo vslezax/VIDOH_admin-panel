@@ -4,8 +4,8 @@
 Интерактивный консольный скрипт:
   - список медиа события (с ролью и порядком);
   - добавить медиа (event_id + media_id, роль, sort_order, caption);
-    * соблюдается частичный UNIQUE: одна роль (main/gallery/...) на событие —
-      повтор для роли 'gallery' разрешён только если роль не уникальна — уточняем;
+    * event_cover/event_big_cover уникальны в рамках события;
+    * event_gallery может повторяться;
   - удалить медиа у события.
 
 Запуск:  python events/manage_event-media.py
@@ -21,7 +21,8 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-ROLES = ("main", "gallery", "logo", "icon", "cover", "avatar")
+ROLES = ("event_cover", "event_big_cover", "event_gallery")
+COVER_ROLES = ("event_cover", "event_big_cover")
 
 
 def list_links(conn, eid: int) -> None:
@@ -48,15 +49,19 @@ def add_link(conn) -> None:
         print(ui.warn("  Это медиа уже привязано к событию."))
         return
 
-    _, role = crud.ask_enum("role", ROLES, current="gallery")
-    # частичный UNIQUE (event_id, role) — проверяем
-    same_role = db.query(conn, "SELECT media_id FROM event_media WHERE event_id=%s AND role=%s;", (eid, role))
-    if same_role:
-        print(ui.warn(f"  У события уже есть медиа с ролью '{role}' (media_id={same_role[0]['media_id']})."))
-        print(ui.dim("  По ограничению uq_event_media_one_role_per_event роль должна быть уникальна."))
-        return
+    _, role = crud.ask_enum("role", ROLES, current="event_gallery")
+    # частичный UNIQUE (event_id, role) — только для ролей-обложек
+    if role in COVER_ROLES:
+        same_role = db.query(conn, "SELECT media_id FROM event_media WHERE event_id=%s AND role=%s;", (eid, role))
+        if same_role:
+            print(ui.warn(f"  У события уже есть медиа с ролью '{role}' (media_id={same_role[0]['media_id']})."))
+            print(ui.dim("  Для event_cover/event_big_cover допускается не более одной записи."))
+            return
 
     sort_order = ui.ask_int("sort_order", default=0) or 0
+    if sort_order < 0:
+        print(ui.fail("  sort_order должен быть >= 0 (CHECK)."))
+        return
     caption = ui.ask("caption (Enter — пусто)", default="").strip() or None
 
     if not ui.confirm(f"Привязать media id={mid} к событию id={eid} (роль {role})?"):

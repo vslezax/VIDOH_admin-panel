@@ -65,6 +65,15 @@ def main() -> int:
         ch, val = crud.ask_text("ogrn")
         if ch and val:
             data["ogrn"] = val
+        if lf == "legal_entity":
+            inn = data.get("inn")
+            ogrn = data.get("ogrn")
+            if not inn or len(inn) not in (10, 12):
+                print(ui.fail("  Для legal_entity нужен inn длиной 10 или 12 символов (CHECK)."))
+                return 0
+            if not ogrn or len(ogrn) not in (13, 15):
+                print(ui.fail("  Для legal_entity нужен ogrn длиной 13 или 15 символов (CHECK)."))
+                return 0
         _, status = crud.ask_enum("status", STATUSES, current="draft")
         data["status"] = status
 

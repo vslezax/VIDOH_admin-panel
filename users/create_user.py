@@ -41,15 +41,21 @@ def main() -> int:
         if phone:
             data["phone"] = phone
 
-        ch, val = crud.ask_text("password_hash")
-        if ch and val:
-            data["password_hash"] = val
-        ch, val = crud.ask_text("name")
-        if ch and val:
-            data["name"] = val
-        ch, val = crud.ask_text("nickname")
-        if ch and val:
-            data["nickname"] = val
+        ch, val = crud.ask_text("password_hash", required=True)
+        if not val:
+            print(ui.fail("  password_hash обязателен (NOT NULL)."))
+            return 0
+        data["password_hash"] = val
+        ch, val = crud.ask_text("name", required=True)
+        if not val:
+            print(ui.fail("  name обязателен (NOT NULL)."))
+            return 0
+        data["name"] = val
+        ch, val = crud.ask_text("nickname", required=True)
+        if not val:
+            print(ui.fail("  nickname обязателен (NOT NULL)."))
+            return 0
+        data["nickname"] = val
         ch, val = crud.ask_fk(conn, "avatar_media_id", "media", label_cols=("storage_key",))
         if ch and val is not None:
             data["avatar_media_id"] = val

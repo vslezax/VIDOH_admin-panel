@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime
 
 _proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _proj_root not in sys.path:
@@ -71,8 +72,8 @@ def main() -> int:
         used = updates.get("used_count", p["used_count"])
         vf = updates.get("valid_from", p["valid_from"])
         vt = updates.get("valid_to", p["valid_to"])
-        if dval is not None and (dval < 0 or (dtype == "percent" and dval > 100)):
-            print(ui.fail("  discount_value нарушает CHECK."))
+        if dval is not None and (dval <= 0 or (dtype == "percent" and dval > 100)):
+            print(ui.fail("  discount_value нарушает CHECK (>0; percent<=100)."))
             return 0
         if max_uses is not None and used is not None and used > max_uses:
             print(ui.fail("  used_count не может быть больше max_uses (CHECK)."))
@@ -88,6 +89,7 @@ def main() -> int:
         if not ui.confirm("Применить?"):
             print(ui.dim("  Отменено."))
             return 0
+        updates["updated_at"] = datetime.now()
         n = crud.run_update(conn, "promo_codes", pid, updates)
         print(ui.ok(f"  Обновлено строк: {n}"))
     finally:

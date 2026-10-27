@@ -9,17 +9,16 @@
 
 Только чтение — никаких изменений не вносит.
 
-Запуск:  python view_db.py
+Запуск:  python db/view_db.py
 """
 from __future__ import annotations
 
 import os
 import sys
-_proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), r'..\..'))
+
+_proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _proj_root not in sys.path:
     sys.path.insert(0, _proj_root)
-
-import sys
 
 from lib import db, ui
 

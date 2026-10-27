@@ -36,7 +36,9 @@ ROOT = Path(__file__).resolve().parent
 # домен -> список (пункт, описание, относительный путь скрипта)
 DOMAINS: dict[str, list[tuple[str, str, str]]] = {
     "DB": [
-        ("view_db.py", "Просмотр БД (сводка, структура)", "db/common/view_db.py"),
+        ("view_db.py", "Просмотр БД (сводка, структура)", "db/view_db.py"),
+        ("create_database.py", "Создать схему из schema.dbml", "db/create_database.py"),
+        ("reset_database.py", "ПОЛНЫЙ сброс БД", "db/reset_database.py"),
     ],
     "S3": [
         ("view_s3-storage.py", "Просмотр S3-хранилища", "s3/common/view_s3-storage.py"),
@@ -95,6 +97,10 @@ DOMAINS: dict[str, list[tuple[str, str, str]]] = {
         ("create_venue.py", "Создать площадку", "catalog/create_venue.py"),
         ("edit_venue.py", "Редактировать площадку", "catalog/edit_venue.py"),
         ("delete_venue.py", "Удалить площадку", "catalog/delete_venue.py"),
+        ("view_metro-stations.py", "Станции метро (просмотр)", "catalog/view_metro-stations.py"),
+        ("create_metro-station.py", "Создать станцию метро", "catalog/create_metro-station.py"),
+        ("edit_metro-station.py", "Редактировать станцию метро", "catalog/edit_metro-station.py"),
+        ("delete_metro-station.py", "Удалить станцию метро", "catalog/delete_metro-station.py"),
     ],
     "TICKETS": [
         ("view_tickets.py", "Билеты (просмотр)", "tickets/view_tickets.py"),

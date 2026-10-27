@@ -19,7 +19,7 @@ if _proj_root not in sys.path:
 
 from lib import crud, db, ui
 
-STATUSES = ("draft", "published", "postponed", "cancelled", "finished", "archived")
+STATUSES = ("unpublished", "published", "cancelled", "finished")
 
 
 def show_summary(conn) -> None:

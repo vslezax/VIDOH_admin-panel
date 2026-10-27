@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime
 
 _proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if _proj_root not in sys.path:
@@ -53,7 +54,10 @@ def main() -> int:
                 updates["total_amount"] = val
         raw = ui.ask(f"currency (текущее: {o['currency']}), Enter — оставить").strip().upper()
         if raw:
-            updates["currency"] = raw
+            if len(raw) != 3:
+                print(ui.warn("  currency должен быть ровно 3 символа (CHAR(3)) — пропускаю."))
+            else:
+                updates["currency"] = raw
         ch, val = crud.ask_fk(conn, "promo_code_id", "promo_codes", current=o["promo_code_id"], label_cols=("code",))
         if ch:
             updates["promo_code_id"] = val
@@ -64,6 +68,16 @@ def main() -> int:
         if ch:
             updates["cancelled_at"] = val
 
+        new_status = updates.get("status", o["status"])
+        new_paid = updates.get("paid_at", o["paid_at"])
+        new_cancelled = updates.get("cancelled_at", o["cancelled_at"])
+        if new_status == "paid" and not new_paid:
+            print(ui.fail("  Для status='paid' нужен paid_at (CHECK)."))
+            return 0
+        if new_status == "cancelled" and not new_cancelled:
+            print(ui.fail("  Для status='cancelled' нужен cancelled_at (CHECK)."))
+            return 0
+
         if not updates:
             print(ui.dim("  Изменений нет."))
             return 0
@@ -71,6 +85,7 @@ def main() -> int:
         if not ui.confirm("Применить?"):
             print(ui.dim("  Отменено."))
             return 0
+        updates["updated_at"] = datetime.now()
         n = crud.run_update(conn, "orders", oid, updates)
         print(ui.ok(f"  Обновлено строк: {n}"))
     finally:

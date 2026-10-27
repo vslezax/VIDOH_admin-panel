@@ -47,11 +47,17 @@ def main() -> int:
             updates["description"] = val
         ch, val = crud.ask_decimal("price", t["price"])
         if ch and val is not None:
-            updates["price"] = val
+            if val < 0:
+                print(ui.warn("  price >= 0 (CHECK) — пропускаю."))
+            else:
+                updates["price"] = val
         raw = ui.ask(f"currency (текущее: {t['currency']}), Enter — оставить").strip().upper()
         if raw:
-            updates["currency"] = raw
-        ch, val = crud.ask_int("tickets_count", t["tickets_count"], min_value=0)
+            if len(raw) != 3:
+                print(ui.warn("  currency должен быть ровно 3 символа (CHAR(3)) — пропускаю."))
+            else:
+                updates["currency"] = raw
+        ch, val = crud.ask_int("tickets_count", t["tickets_count"], min_value=1)
         if ch:
             updates["tickets_count"] = val
         ch, val = crud.ask_int("sold_count", t["sold_count"], min_value=0)

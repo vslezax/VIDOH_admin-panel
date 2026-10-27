@@ -1,8 +1,8 @@
 ﻿# VDH-DB-connection — АУДИТ: баги, недоделки, ошибки
 
 Документ составлен по результатам статического просмотра **всех** скриптов
-проекта (92 `.py`-файла вне `.venv`) и сверки с реальной схемой БД
-(`schema.sql.txt` / `VIDOH.dbml`) и с API общих модулей `lib/`.
+проекта (96 `.py`-файлов вне `.venv`) и сверки с реальной схемой БД
+(`schema.dbml` / `schema.sql`) и с API общих модулей `lib/`.
 
 > Этот файл рассчитан на то, чтобы быть **самодостаточным**: сначала идёт
 > описание проекта, структуры и модели данных (раздел «Контекст проекта»),
@@ -55,7 +55,7 @@
 - **python-dotenv** — чтение `.env` в корне проекта.
 - **boto3** — S3-клиент для Backblaze B2.
 - **lark-dbml / sqlglot** — только для `service/convert_dbml-to-sql.py`
-  (конвертация `VIDOH.dbml` → SQL).
+  (конвертация `schema.dbml` → SQL).
 - **Pillow** — только для `media/upload_media.py` (размеры изображений).
 - Требования зафиксированы в `requirements.txt`; окружение — в `.venv`.
 
@@ -97,15 +97,15 @@ VDH-DB-connection/
 ├── events/                 события, ссылки, расписания, документы, связи (19)
 ├── organizers/             организаторы и контакты (5)
 ├── users/                  пользователи, сессии, избранное (6)
-├── catalog/                страны, города, площадки, категории (16)
+├── catalog/                страны, города, площадки, категории, метро (20)
 ├── tickets/                билеты и промокоды (8)
 ├── media/                  медиа: просмотр/загрузка/правка/удаление (4)
 ├── sales/                  заказы, позиции, платежи, выданные билеты (14)
 ├── reviews/                отзывы: просмотр/модерация/удаление (3)
 ├── service/                сервисные/опасные скрипты (конвертация, деплой,
 │                           очистка, тест, снапшот, восстановление)
-├── VIDOH.dbml              исходная схема (DBML)
-├── schema.sql.txt          SQL-схема (DDL + FK) — см. недоделку 3.1
+├── schema.dbml             исходная схема (DBML)
+├── schema.sql              SQL-схема (DDL + FK; генерируется из schema.dbml)
 ├── requirements.txt        зависимости
 ├── README.md               краткое руководство
 └── SUMMARY.txt             история реорганизации проекта (историческ.)
@@ -174,7 +174,7 @@ RESTRICT/NO ACTION); `report_dependencies(deps)` печатает отчёт и 
 
 ## К.7. Модель данных (обзор схемы)
 
-Схема описана в `VIDOH.dbml` и развёрнута в `schema.sql.txt`. ENUM-типы:
+Схема описана в `schema.dbml` и развёрнута в `schema.sql`. ENUM-типы:
 `user_status`, `organizer_status`, `organizer_legal_form`, `event_status`,
 `media_type`, `media_role`, `link_type`, `document_type`, `review_status`,
 `order_status`, `ticket_status`, `promo_discount_type`, `schedule_kind`,
@@ -190,33 +190,41 @@ RESTRICT/NO ACTION); `report_dependencies(deps)` печатает отчёт и 
 - **organizers**: `organizers` (slug UNIQUE, legal_form/status enum,
   avatar/cover media SET NULL), `organizer_contacts` (FK→organizers CASCADE).
 - **catalog**: `countries` (iso UNIQUE), `cities` (FK→countries NO ACTION,
-  UNIQUE(country_id, slug), CHECK lat/lng), `venues` (FK→cities NO ACTION,
-  UNIQUE(city_id, slug), CHECK lat/lng/capacity), `categories`
-  (slug UNIQUE, icon media SET NULL).
-- **media**: `media` (storage_key UNIQUE, type enum, CHECK width/height/size,
-  uploaded_by→users SET NULL).
+  UNIQUE(country_id, slug)), `venues` (FK→cities NO ACTION, FK→metro_stations
+  SET NULL, UNIQUE(city_id, slug), CHECK lat/lng парой и capacity>0),
+  `categories` (slug UNIQUE, icon media SET NULL), `metro_stations`
+  (FK→cities NO ACTION, UNIQUE(city_id, name), `line_color` HEX-CHECK,
+  line_icon media SET NULL, sort_order≥0).
+- **media**: `media` (storage_key UNIQUE, `media_type` = image/video,
+  CHECK width/height/size, uploaded_by→users SET NULL).
 - **events** (ядро): `events` (uuid/slug UNIQUE, FK→venues SET NULL,
-  CHECK venue ИЛИ online_url, age_rating enum-набор 0/6/12/16/18, capacity≥0);
-  связи: `event_media` (CASCADE), `event_organizers` (CASCADE,
+  CHECK venue ИЛИ online_url, age_rating 0/6/12/16/18, capacity>0,
+  published→published_at); связи: `event_media` (CASCADE, роли
+  event_cover/event_big_cover/event_gallery), `event_organizers` (CASCADE,
   partial UNIQUE primary), `event_categories` (CASCADE, partial UNIQUE primary);
-  дочерние: `event_links` (CHECK url ^https?://), `event_schedules`
+  дочерние: `event_links` (sort_order≥0; URL проверяется скриптом), `event_schedules`
   (CHECK по kind: once→start_at, recurring→recurrence; utc_offset `±HH:MM`),
   `event_documents` (CHECK content ИЛИ url).
-- **tickets**: `tickets` (FK→events CASCADE, CHECK sold≤count, price≥0),
-  `promo_codes` (code UNIQUE, FK→events SET NULL, CHECK percent≤100,
-  max_uses, valid_to>valid_from).
+- **tickets**: `tickets` (FK→events CASCADE, `tickets_count`/`sold_count`,
+  CHECK sold_count≤tickets_count, price≥0), `promo_codes` (code UNIQUE,
+  FK→events SET NULL, discount_type percent/fixed, CHECK discount_value>0
+  и percent≤100, max_uses, valid_to>valid_from).
 - **sales**: `orders` (uuid UNIQUE, FK→users/events NO ACTION,
-  promo_code SET NULL, total_amount≥0), `order_items` (FK→orders CASCADE,
-  FK→tickets NO ACTION, quantity>0), `issued_tickets` (uuid/code UNIQUE,
-  FK→order_item/user/event NO ACTION, CHECK status='used'⇔checked_in_at NOT NULL),
-  `payments` (FK→orders CASCADE, amount>0, UNIQUE(provider, provider_txn/idempotency_key)).
+  promo_code SET NULL, total_amount≥0, paid→paid_at, cancelled→cancelled_at),
+  `order_items` (FK→orders CASCADE, FK→tickets NO ACTION, quantity>0,
+  CHECK total_price=quantity*unit_price), `issued_tickets` (uuid/code UNIQUE,
+  FK→order_item/user/event NO ACTION, ticket_status active/used/cancelled/refunded,
+  CHECK used→checked_in_at NOT NULL), `payments` (FK→orders CASCADE, amount≥0,
+  частичные UNIQUE(provider, provider_txn/idempotency_key)).
 - **reviews**: `event_reviews` (FK→events/users CASCADE, CHECK rating 1..5,
   UNIQUE(event_id, user_id)).
 
 Правила `ON DELETE`, важные для `delete_guard`: удаление `events` каскадно
 удаляет медиа/связи/расписания/документы/билеты/избранное/отзывы, но
 **блокируется** при наличии `orders`/`issued_tickets` (NO ACTION) и
-обнуляет `promo_codes.event_id` (SET NULL).
+обнуляет `promo_codes.event_id` (SET NULL). Удаление `metro_stations`
+обнуляет `venues.metro_station_id` (SET NULL), а удаление `cities`
+блокируется наличием станций метро (NO ACTION).
 
 ## К.8. Как запускать
 
@@ -253,7 +261,7 @@ python -m pip install -r requirements.txt
 
 ## Статус проверок
 
-- [x] Компиляция всех файлов: `.\.venv\Scripts\python.exe -m py_compile` по 92
+- [x] Компиляция всех файлов: `.\.venv\Scripts\python.exe -m py_compile` по 96
       файлам — **код возврата 0, синтаксических ошибок нет**.
 - [ ] Сквозной runtime-прогон (смоук-тест против живой БД) — **НЕ выполнен**:
       в текущем окружении нет рабочего `.env`/доступа к Neon, скрипты
@@ -288,19 +296,11 @@ python -m pip install -r requirements.txt
   "host": platform.node(),
   ```
 
-### 1.2. `sales/create_order-item.py` — `quantity` может уйти как `NULL`
-```python
-ch, qty = crud.ask_int("quantity", required=True, min_value=1)
-data["quantity"] = qty
-```
-`crud.ask_int` при вводе одного из `NULL_TOKENS` (`null`, `-`, `none`, `пусто`)
-возвращает `(True, None)` **даже при `required=True`** (проверка `required`
-срабатывает только на **пустом** вводе, а не на null-токене). В итоге
-`quantity=None` → `INSERT ... VALUES (..., NULL, ...)` → нарушение `NOT NULL`
-(`order_items.quantity`). Пользователь увидит техническую ошибку БД вместо
-подсказки.
-- Аналогичный паттерн есть в других `create_*`, где `required=True`
-  результат присваивается без проверки на `None` (см. п. 2.1).
+### 1.2. `sales/create_order-item.py` — `quantity` мог уйти как `NULL` (устранено)
+В `sales/create_order-item.py` добавлена проверка `qty is None`, ограничение
+`quantity` диапазоном smallint (1..32767) и проверка
+`total_price = quantity * unit_price`. В затронутых `create_*` (`users`,
+`metro_stations` и др.) добавлены явные проверки NOT NULL-полей.
 
 ### 1.3. `service/restore_snapshot.py` — восстановление из `dump.json` игнорирует транзакционность
 ```python
@@ -319,20 +319,12 @@ N, уже вставленные строки **останутся** в БД (ч
 
 ## 2. [БАГ] Некорректное поведение в реальных сценариях
 
-### 2.1. `crud.ask_*` + проверка `required`
-`lib/crud.py`: `ask_text/ask_int/ask_decimal` при вводе null-токена возвращают
-`None`, невзирая на `required`. Скрипты, которые делают
-`_, x = crud.ask_*(..., required=True)` и затем сразу `data[...] = x`, не
-проверяют `x is not None`:
-- `catalog/create_city.py` (`name`, `slug` — есть частичная проверка `if not name`);
-- `catalog/create_venue.py` (`name`, `slug`, `address` — проверяются);
-- `tickets/create_ticket.py` (`price` → присваивается `0` если None — ок);
-- `sales/create_order-item.py` (`quantity`, `unit_price`, `total_price`);
-- `events/create_event.py` (`slug`, `title` — проверяются).
-
-Наиболее проблемный — `create_order-item.py` (см. 1.2). Рекомендация: в
-`crud.ask_*` при `required=True` не принимать null-токены (переспрашивать),
-либо добавить в скрипты проверку возвращённого значения.
+### 2.1. `crud.ask_*` + проверка `required` (частично устранено)
+`lib/crud.py` по-прежнему возвращает `None` при вводе null-токена, даже если
+передан `required=True`. В проблемных сценариях добавлены проверки
+возвращённого значения: `sales/create_order-item.py` (quantity/unit_price/
+total_price), `users/create_user.py`, `catalog/create_metro-station.py` и др.
+Полное исправление поведения `ask_*` в `lib/crud.py` не выполнялось.
 
 ### 2.2. `lib/crud.ask_fk` — проверка существования только по колонке `id`
 ```python
@@ -378,32 +370,28 @@ if str(data["valid_to"]) <= str(data["valid_from"]):
 строково → `False`, хотя по времени это так). Рекомендация: парсить в
 `datetime` перед сравнением. [БАГ].
 
-### 2.7. `users/manage_user-sessions.py` — `ip` без валидации INET
-```python
-ip = ui.ask("ip (Enter — пусто)").strip() or None
-```
-Колонка `user_sessions.ip` имеет тип `INET`. Любая строка, не являющаяся
-валидным IP, вызовет ошибку вставки на стороне БД (перехватывается общим
-`try`, но пользователю выдаётся техническое сообщение). Добавить валидацию
-через `ipaddress.ip_address`. [БАГ].
+### 2.7. `users/manage_user-sessions.py` — `ip` без валидации INET (устранено)
+`user_sessions.ip` имеет тип `INET`. Теперь `manage_user-sessions.py`
+проверяет значение через `ipaddress.ip_address` до INSERT и не отправляет
+невалидный IP в БД.
 
-### 2.8. `currency` (CHAR(3)) не валидируется по длине
-`orders`, `tickets`, `events`, `payments` — `currency CHAR(3)`. Скрипты
-принимают `ui.ask("currency", default="RUB").strip().upper()` без проверки
-длины. Строка длиной >3 вызовет ошибку `value too long for type character(3)`;
-строки длиной <3 дополняются пробелами. Валидировать `len == 3` и, желательно,
-по списку ISO-4217. [БАГ].
+### 2.8. `currency` (CHAR(3)) не валидируется по длине (частично устранено)
+Для `tickets` и `orders` добавлена проверка `len(currency) == 3` в
+`create_ticket.py`, `edit_ticket.py`, `create_order.py`, `edit_order.py`.
+В `events/create_event.py`/`edit_event.py` проверка пока отсутствует; отдельного
+`create_payment.py` по-прежнему нет. Желательна также проверка по ISO-4217. [БАГ].
 
 ---
 
 ## 3. [НЕДОДЕЛ] Незавершённая / отсутствующая функциональность
 
-### 3.1. `schema.sql` отсутствует в репозитории
-В `SUMMARY.txt` и в комментариях `service/*` упоминается `ROOT/schema.sql`, но
-в корне лежит только **`schema.sql.txt`** (см. примечание в самом SUMMARY).
-`service/deploy_schema.py` и `service/restore` рассчитывают на `schema.sql`.
-Нужно переименовать/добавить `schema.sql` либо заставить скрипты читать
-`schema.sql.txt`. Сейчас развёртывание схемы «из коробки» не работает.
+### 3.1. `schema.sql` генерируется из `schema.dbml`, но конвертер инвертирует FK
+`service/convert_dbml-to-sql.py` теперь читает `schema.dbml`, а `schema.sql`
+присутствует в корне. Однако `lark-dbml`/`to_sql` генерирует внешние ключи в
+обратную сторону (например, `users.id REFERENCES user_sessions.user_id`).
+Текущий `schema.sql` нельзя разворачивать как есть: нужен фикс
+конвертера/постобработка либо восстановление корректного SQL перед запуском
+`service/deploy_schema.py`. [КРИТ].
 
 ### 3.2. Генератор расписаний: `once` c `start_at` реализован, но `recurrence` не валидируется по формату
 `events/create_event-schedule.py` принимает `recurrence` как произвольную
@@ -422,11 +410,10 @@ ip = ui.ask("ip (Enter — пусто)").strip() or None
 `raw_payload`, `idempotency_key`) полноценного CRUD нет — в отличие от
 остальных доменов. [НЕДОДЕЛ].
 
-### 3.5. `media/upload_media.py` — список разрешённых расширений не применяется
-`ALLOWED_DEFAULT` определён, но используется только для **предупреждения**,
-не для блокировки. Проверка MIME ↔ расширение отсутствует; тип (`image/video/doc`)
-определяется из MIME, но пользователь может переопределить вручную. Осознанно
-«мягко», но помечено как недоделка контроля. [НЕДОДЕЛ]/[БЕЗОП].
+### 3.5. `media/upload_media.py` — `doc` удалён, разрешены только image/video (устранено)
+`ALLOWED_DEFAULT` теперь блокирует расширения вне image/video, MIME проверяется
+через `s3.media_type_from_mime`, а тип ограничен значениями `image`/`video`.
+Значение `doc` удалено из `media_type` и из скриптов медиа.
 
 ### 3.6. `media/upload_media.py` — откат S3 при ошибке БД не откатывает частично
 Откат (удаление объекта из S3) есть, но если `delete_object` тоже упадёт —
@@ -472,9 +459,10 @@ def list_rows(..., order="id DESC", ...):
 если аргумент станет пользовательским. Ограничить/задокументировать. [БЕЗОП].
 
 ### 4.4. `crud.ask_enum` — регистрозависимый набор при выводе, но `lower()` при вводе
-Пользователю показываются значения как есть (`main|gallery|...`), ввод
-приводится к `lower()`. Если в enum есть значения с верхним регистром — сломается.
-Сейчас все enum в схеме в нижнем регистре — ок, но хрупко. [МЕЛОЧЬ].
+Пользователю показываются значения как есть
+(`event_cover|event_big_cover|event_gallery|...`), ввод приводится к `lower()`.
+Если в enum есть значения с верхним регистром — сломается. Сейчас все enum в
+схеме в нижнем регистре — ок, но хрупко. [МЕЛОЧЬ].
 
 ### 4.5. `lib/ui.ui`-цвета: `_USE_COLOR = sys.stdout.isatty()` фиксируется при импорте
 Если импорт произошёл до перенастройки потока (см. `lib/__init__._force_utf8_stdio`),
@@ -533,9 +521,10 @@ def list_rows(..., order="id DESC", ...):
 не доступно случайно из меню (`run_admin.py` → SERVICE → clear). Отдельно
 проверить наличие предохранителя (например, требование ввести имя БД). [НЕДОДЕЛ-проверка].
 
-### 5.4. `upload_media.py` — доверие пользовательскому префиксу пути
-`_normalize_custom_dir` защищает от `..`, что хорошо. Но проверки MIME/типа
-мягкие (см. 3.5) — потенциальная загрузка `.exe` под видом `doc`. [БЕЗОП]/[НЕДОДЕЛ].
+### 5.4. `upload_media.py` — доверие пользовательскому префиксу пути (снижено)
+`_normalize_custom_dir` защищает от `..`. Дополнительно тип ограничен
+`image`/`video`, а расширения и MIME вне этого набора блокируются, поэтому
+загрузка `.exe` под видом `doc` больше не проходит через штатный сценарий.
 
 ---
 
@@ -543,7 +532,8 @@ def list_rows(..., order="id DESC", ...):
 
 - `SUMMARY.txt` раздел 3.5 перечисляет 4 сервисных скрипта; фактически есть
   ещё `backup_snapshot.py`, `restore_snapshot.py` (добавлены в `run_admin.py`).
-- `SUMMARY.txt` ссылается на `schema.sql`; в репозитории — `schema.sql.txt`.
+- `SUMMARY.txt` ссылается на `schema.sql`; фактическая схема — `schema.dbml`
+  и генерируемый `schema.sql`.
 - README обещает 7 переменных `.env` — сверить, что документированы все.
 - В шапках `media/edit_media.py` («Запуск: python manage_media.py»),
   `media/delete_media.py` («Запуск: python delete_media.py»),
@@ -554,13 +544,15 @@ def list_rows(..., order="id DESC", ...):
 
 ## 7. Рекомендуемый порядок исправлений
 
-1. **[КРИТ]** Транзакция в `service/restore_snapshot.py` (2.3).
-2. **[БАГ]** Проверка `None` после `crud.ask_*(required=True)` /
-   исправление `ask_*` (2.1, 1.2) — минимум в `create_order-item.py`.
+1. **[КРИТ]** Транзакция в `service/restore_snapshot.py` (1.3).
+2. **[БАГ]** Полная проверка `None` после `crud.ask_*(required=True)` /
+   исправление `ask_*` (2.1, 1.2) — частично сделано в скриптах.
 3. **[БАГ]** `os.uname()` → `platform.node()` (1.1).
-4. **[БАГ]** Валидация `currency` (длина 3) и `ip` (INET) — 2.7, 2.8.
+4. **[БАГ]** Валидация `currency` (длина 3) для `events`/`payments`; `ip` (INET)
+   уже валидируется — 2.7, 2.8.
 5. **[БАГ]** Сравнение дат как `datetime` в `create/edit_promo-code.py` (2.6).
-6. **Восстановить `schema.sql`** / научить скрипты читать `schema.sql.txt` (3.1).
+6. **[КРИТ]** Исправить генерацию `schema.sql` (инвертированные FK) и проверить
+   `service/deploy_schema.py` (3.1).
 7. **[БЕЗОП]** `override=False` для dotenv; белый список для `order` (5.1, 4.3).
 8. Вынести enum'ы в `lib/enums.py` (4.6); обновить шапки/доки (раздел 6).
 9. Дописать недостающий CRUD (`payments`) и тесты (3.4, 3.8).
@@ -576,27 +568,26 @@ def list_rows(..., order="id DESC", ...):
 Библиотека: `lib/__init__.py`, `lib/db.py`, `lib/ui.py`, `lib/crud.py`,
 `lib/delete_guard.py`, `lib/s3.py` (частично `lib/bootstrap.py` — по SUMMARY).
 
-Схема: `schema.sql.txt`, `VIDOH.dbml` (ключевые таблицы).
+Схема: `schema.dbml`, `schema.sql` (ключевые таблицы).
 
 Домены (полностью или выборочно по каждому действию):
 `db/common/view_db.py`, `s3/common/*` (частично), `events/*` (create_event,
 create_event-link, create_event-schedule, create_event-document, edit_event,
 delete_event, manage_event-categories, manage_event-organizers,
-manage_event-media), `catalog/*` (create/edit city, venue, country),
-`sales/*` (create_order, create_order-item, edit_order, edit_order-item,
-edit_issued-ticket-status, create_issued-ticket), `tickets/*`
+manage_event-media), `catalog/*` (create/edit city, venue, country,
+metro-stations), `sales/*` (create_order, create_order-item, edit_order,
+edit_order-item, edit_issued-ticket-status, create_issued-ticket), `tickets/*`
 (create_ticket, edit_ticket, create_promo-code), `users/*` (create_user,
 manage_user-sessions, manage_user-favorites), `organizers/*`
 (edit_organizer, manage_organizer-contacts), `reviews/moderate_reviews.py`,
-`media/*` (upload, edit, delete), `service/*` (backup_snapshot,
-restore_snapshot), `run_admin.py`.
+`media/*` (upload, edit, delete), `service/*` (convert_dbml-to-sql,
+deploy_schema, backup_snapshot, restore_snapshot), `run_admin.py`.
 
 Не прочитаны целиком (но покрыты компиляцией и grep): `events/view_*`,
 `events/edit/delete_* event-link/schedule/document`, `catalog/delete_*`,
 `catalog/view_*`, `sales/view_*`, `sales/delete_*`, `tickets/view/delete_*`,
 `users/view/delete_user`, `organizers/view/create/delete_*`,
 `reviews/view_reviews.py`, `reviews/delete_review.py`,
-`service/convert_dbml-to-sql.py`, `service/deploy_schema.py`,
 `service/clear_database.py`, `service/test_db-connection.py`,
 `s3/common/view_s3-storage.py`, `s3/common/sync_media-db-s3.py`,
 `lib/bootstrap.py`.

@@ -68,6 +68,17 @@ def main() -> int:
         if ch:
             updates["status"] = val
 
+        new_legal_form = updates.get("legal_form", o["legal_form"])
+        if new_legal_form == "legal_entity":
+            new_inn = updates.get("inn", o["inn"])
+            new_ogrn = updates.get("ogrn", o["ogrn"])
+            if not new_inn or len(new_inn) not in (10, 12):
+                print(ui.fail("  Для legal_entity нужен inn длиной 10 или 12 символов (CHECK)."))
+                return 0
+            if not new_ogrn or len(new_ogrn) not in (13, 15):
+                print(ui.fail("  Для legal_entity нужен ogrn длиной 13 или 15 символов (CHECK)."))
+                return 0
+
         if not updates:
             print(ui.dim("  Изменений нет."))
             return 0
